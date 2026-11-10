@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NESTORA Map</title>
+<style>html,body{margin:0}</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: the map fills the screen. Everything else floats on it: brand and tools at the corners, search centred at the top with category chips under it, map controls on the end side, a compact property card bottom-start. Single committed look: navy, gold, cream. */
+:root{
+  --navy:#0B1B2E; --navy-2:#13293F; --navy-3:#23405E;
+  --ivory:#F7F3EA; --ivory-2:#EFE8D8; --beige:#D9CBB4;
+  --gold:#C9AE79; --gold-2:#A88B55; --stone:#5E5C58;
+  --display:'Cormorant Garamond','Amiri',Georgia,serif;
+  --body:'Inter','IBM Plex Sans Arabic',system-ui,sans-serif;
+  --shadow:0 6px 22px rgba(11,27,46,.28);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--ivory-2);color:var(--navy);font:14px/1.45 var(--body);overflow:hidden;-webkit-font-smoothing:antialiased}
+html[lang=ar] body{font-family:'IBM Plex Sans Arabic','Inter',system-ui,sans-serif}
+html[lang=ar] .brand b,html[lang=ar] h3,html[lang=ar] .nbl,html[lang=ar] .dh{font-family:'Amiri',Georgia,serif;letter-spacing:0}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold-2);outline-offset:2px}
+#app{position:relative;height:100%;overflow:hidden}
+
+/* ---- MapLibre GL core (inlined: stylesheets from CDNs are blocked in Artifacts) ---- */
+.maplibregl-map{position:relative;overflow:hidden;-webkit-tap-highlight-color:rgb(0 0 0/0)}
+.maplibregl-canvas{position:absolute;left:0;top:0}
+.maplibregl-canvas-container.maplibregl-interactive{cursor:grab;user-select:none;-webkit-user-select:none}
+.maplibregl-canvas-container.maplibregl-interactive:active{cursor:grabbing}
+.maplibregl-canvas-container.maplibregl-touch-zoom-rotate,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate .maplibregl-canvas{touch-action:pan-x pan-y}
+.maplibregl-canvas-container.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:pinch-zoom}
+.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:none}
+.maplibregl-marker{position:absolute;top:0;left:0;will-change:transform}
+.maplibregl-canvas:focus{outline:0}
+#map{position:absolute;inset:0;z-index:0;direction:ltr;background:var(--ivory-2)}
+
+/* ---- floating UI ---- */
+.float{position:absolute;z-index:1200;pointer-events:none}
+.float>*{pointer-events:auto}
+.topbar{inset:12px 12px auto 12px;display:grid;grid-template-columns:1fr minmax(0,580px) 1fr;gap:8px 12px;align-items:start}
+.brandbox{justify-self:start;display:flex;align-items:center;gap:8px;background:var(--navy);padding:8px 12px;box-shadow:var(--shadow);border:1px solid var(--gold-2)}
+.brand b{font:600 20px/1 var(--display);letter-spacing:.3em;color:var(--ivory)}
+.brand small{display:block;font:italic 500 12px/1.1 var(--display);color:var(--gold);margin-top:2px;letter-spacing:.02em}
+.demochip{border:1px solid var(--gold);color:var(--gold);padding:3px 6px;font:600 9.5px/1 var(--body);letter-spacing:.14em;text-transform:uppercase}
+.center{display:flex;flex-direction:column;gap:8px;min-width:0}
+.search{position:relative}
+.search input{width:100%;background:var(--ivory);border:1px solid var(--beige);padding:13px 14px 13px 42px;font-size:15px;box-shadow:var(--shadow);color:var(--navy)}
+html[dir=rtl] .search input{padding:13px 42px 13px 14px}
+.search svg{position:absolute;inset-inline-start:13px;top:50%;transform:translateY(-50%);width:18px;height:18px;stroke:var(--navy-3);fill:none;stroke-width:2;pointer-events:none}
+.sugg{position:absolute;inset-inline:0;top:calc(100% + 4px);background:var(--ivory);max-height:min(300px,45vh);overflow:auto;box-shadow:var(--shadow);border:1px solid var(--beige)}
+.sugg button{display:block;width:100%;text-align:start;background:none;border:0;border-bottom:1px solid var(--ivory-2);padding:9px 14px}
+.sugg button:hover,.sugg button:focus-visible{background:var(--ivory-2)}
+.sugg small{display:block;color:var(--stone);font-size:11px}
+.chiprow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 1px 6px;margin:0 -1px}
+.chiprow::-webkit-scrollbar{display:none}
+.chip{flex:none;display:inline-flex;align-items:center;gap:7px;background:var(--ivory);border:1px solid var(--beige);padding:7px 12px;font-size:13px;box-shadow:0 2px 8px rgba(11,27,46,.16);white-space:nowrap}
+.chip i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--navy)}
+.chip[aria-pressed=true]{background:var(--navy);color:var(--ivory);border-color:var(--navy)}
+.chip[aria-pressed=true] i{border-color:var(--ivory)}
+.tools{justify-self:end;display:flex;gap:8px}
+.tbtn{background:var(--ivory);border:1px solid var(--beige);padding:9px 12px;box-shadow:var(--shadow);font-size:13px;min-width:40px}
+.tbtn:hover{background:var(--ivory-2)}
+.chipwrap{position:relative}
+.pop{position:absolute;top:100%;margin-top:6px;inset-inline-end:0;width:290px;background:var(--ivory);border:1px solid var(--beige);box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px}
+.pop label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--stone);letter-spacing:.04em;text-transform:uppercase}
+.pop select,.pop input[type=range]{width:100%}
+.pop select{background:#fff;border:1px solid var(--beige);padding:8px}
+.pop input[type=range]{accent-color:var(--gold-2)}
+.pop .row{display:flex;justify-content:space-between;align-items:center}
+.pop output{color:var(--navy);font-weight:600;text-transform:none;letter-spacing:0}
+.link{background:none;border:0;color:var(--navy-3);text-decoration:underline;padding:0;font-size:12px}
+
+.mapctl{inset-inline-end:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
+.cgroup{display:flex;flex-direction:column;background:var(--ivory);border:1px solid var(--beige);box-shadow:var(--shadow)}
+.cgroup button,.cbtn{width:42px;height:42px;background:var(--ivory);border:0;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.cgroup button+button{border-top:1px solid var(--beige)}
+.cgroup button:hover,.cbtn:hover{background:var(--ivory-2)}
+.cbtn{border:1px solid var(--beige);box-shadow:var(--shadow)}
+.cbtn svg{width:20px;height:20px;stroke:var(--navy);fill:none;stroke-width:2}
+
+.card{inset-inline-start:14px;bottom:44px;width:340px;max-width:calc(100% - 28px);background:var(--ivory);box-shadow:0 14px 40px rgba(11,27,46,.4);border:1px solid var(--beige)}
+.card canvas{display:block;width:100%;height:auto;aspect-ratio:16/7.2}
+.card .x{position:absolute;inset-inline-end:8px;top:8px;width:30px;height:30px;background:var(--ivory);border:1px solid var(--navy);font-size:19px;line-height:1;padding:0}
+.card .b{padding:12px 14px 14px;display:flex;flex-direction:column;gap:5px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;position:absolute;inset-inline-start:8px;top:8px}
+.badge{font:600 10px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;padding:5px 7px;background:var(--navy);color:var(--gold)}
+.kind{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--stone)}
+.card h3{margin:0;font:600 24px/1.1 var(--display);text-wrap:balance}
+.price{font:600 20px/1.1 var(--body);font-variant-numeric:tabular-nums}
+.meta{display:flex;gap:6px 14px;flex-wrap:wrap;color:var(--navy-3);font-size:13px}
+.btn{background:var(--navy);color:var(--ivory);border:1px solid var(--navy);padding:10px 14px;font-size:13px;letter-spacing:.03em;margin-top:6px}
+.btn:hover{background:var(--navy-3)}
+.btn.alt{background:transparent;color:var(--navy)}
+.btn.alt:hover{background:var(--ivory-2)}
+
+.attr{inset-inline-end:8px;bottom:6px;background:rgba(247,243,234,.92);padding:2px 7px;font-size:10px;color:var(--stone)}
+.attr a{color:var(--navy-3)}
+.notice{inset-inline-start:14px;bottom:10px;max-width:calc(100% - 200px);background:rgba(247,243,234,.94);padding:4px 9px;font-size:11px;color:var(--stone);border:1px solid var(--beige)}
+.notice b{color:var(--navy);letter-spacing:.1em;margin-inline-end:6px}
+.mode{inset-inline:0;top:auto;bottom:34px;display:flex;justify-content:center;padding:0 16px}
+.mode>div{max-width:560px;background:var(--navy);color:var(--ivory);border:1px solid var(--gold);padding:8px 12px;font-size:12px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:flex-start}
+.mode b{color:var(--gold);white-space:nowrap}
+.mode button{background:none;border:0;color:var(--gold);font-size:18px;line-height:1;padding:0 2px}
+body.has-card .mode{display:none}
+
+/* markers */
+.pmw{position:relative;width:0;height:0}
+.pm{position:absolute;left:0;bottom:7px;transform:translateX(-50%);white-space:nowrap;font:600 12.5px/1 var(--body);padding:6px 10px;border:1.5px solid var(--gold);box-shadow:0 3px 10px rgba(11,27,46,.35);font-variant-numeric:tabular-nums;transition:transform .12s}
+.pm::after{content:"";position:absolute;left:50%;bottom:-6px;width:9px;height:9px;background:inherit;border:inherit;border-top:0;border-left:0;transform:translateX(-50%) rotate(45deg)}
+.pmw:hover .pm{transform:translateX(-50%) scale(1.07)}
+.pm.sale{background:var(--navy);color:var(--ivory)}
+.pm.rent{background:var(--gold);color:var(--navy);border-color:var(--navy)}
+.pm.land{background:var(--ivory);color:var(--navy);border-color:var(--navy)}
+.pm.commercial{background:var(--navy-3);color:var(--ivory)}
+.pm.invest{background:var(--navy);color:var(--gold);box-shadow:0 0 0 2px var(--navy),0 0 0 3.5px var(--gold),0 3px 10px rgba(11,27,46,.35)}
+.pm.sel{transform:translateX(-50%) scale(1.18);box-shadow:0 0 0 3px var(--gold),0 6px 16px rgba(11,27,46,.5)}
+.nbl{position:absolute;left:0;top:0;transform:translate(-50%,-50%);font:500 14px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--navy-3);white-space:nowrap;text-shadow:0 0 3px var(--ivory),0 0 6px var(--ivory),0 0 8px var(--ivory);pointer-events:none}
+.nbl::before{content:"";display:block;width:5px;height:5px;border-radius:50%;background:var(--gold-2);margin:0 auto 4px}
+
+/* details */
+.modal{position:absolute;inset:0;background:rgba(11,27,46,.62);display:flex;align-items:center;justify-content:center;padding:16px;z-index:1500}
+.sheet{background:var(--ivory);width:min(560px,100%);max-height:100%;overflow:auto;position:relative;border:1px solid var(--gold-2)}
+.sheet canvas{display:block;width:100%;height:auto;aspect-ratio:16/7}
+.sheet .b{padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px}
+.sheet h3{margin:0;font:600 30px/1.08 var(--display)}
+.dh{font:600 11px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--gold-2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--beige);border:1px solid var(--beige)}
+.grid div{background:var(--ivory);padding:9px 11px}
+.grid small{display:block;color:var(--stone);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.grid span{font-weight:600}
+.warn{border:1px solid var(--gold-2);background:var(--ivory-2);padding:8px 10px;font-size:12px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+
+@media (max-width:720px){
+  .topbar{grid-template-columns:1fr auto;grid-template-rows:auto auto}
+  .brand small{display:none}
+  .brand b{font-size:17px}
+  .center{grid-column:1 / -1;grid-row:2}
+  .tools{grid-column:2;grid-row:1}
+  .search input{font-size:16px}
+  .mapctl{top:auto;bottom:calc(var(--cardH,0px) + 52px);transform:none}
+  body:not(.has-card) .mapctl{bottom:60px}
+  .card{inset-inline:10px;width:auto;max-width:none;bottom:36px;display:grid;grid-template-columns:120px 1fr;align-items:stretch}
+  .card canvas{height:100%;width:100%;aspect-ratio:auto;object-fit:cover}
+  .card .b{padding:10px 12px}
+  .card h3{font-size:19px}
+  .notice{max-width:calc(100% - 28px);bottom:6px}
+  .mode{bottom:60px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head><body>
+<div id="app">
+  <div id="map" role="application" aria-label="Map of Amman"></div>
+
+  <div class="float topbar">
+    <div class="brandbox">
+      <div class="brand"><b>NESTORA</b><small data-i="tagline">Imagine What’s Possible.</small></div>
+      <span class="demochip" data-i="demo">Demo</span>
+    </div>
+    <div class="center">
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" autocomplete="off" data-ia="searchPh" placeholder="Search a neighborhood or property" aria-label="Search">
+        <div class="sugg" id="sugg" hidden></div>
+      </div>
+      <div class="chiprow" id="chips" role="group" aria-label="Category"></div>
+    </div>
+    <div class="tools">
+      <div class="chipwrap">
+        <button type="button" class="tbtn" id="fBtn" aria-expanded="false"></button>
+        <div class="pop" id="pop" hidden>
+          <label><span data-i="fType">Property type</span><select id="fType"></select></label>
+          <label><div class="row"><span data-i="fArea">Minimum area</span><output id="fAreaV">0 m²</output></div><input type="range" id="fArea" min="0" max="1000" step="50" value="0"></label>
+          <div class="row"><button type="button" class="link" id="fReset" data-i="fReset">Clear filters</button><button type="button" class="btn" id="fDone" style="margin:0" data-i="fDone">Done</button></div>
+        </div>
+      </div>
+      <button type="button" class="tbtn" id="langBtn" aria-label="Language">العربية</button>
+    </div>
+  </div>
+
+  <div class="float mapctl">
+    <div class="cgroup"><button type="button" id="zIn" aria-label="Zoom in">+</button><button type="button" id="zOut" aria-label="Zoom out">−</button></div>
+    <button type="button" class="cbtn" id="styleBtn" aria-label="Map style" title="Map style"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+    <button type="button" class="cbtn" id="reset" aria-label="Reset to Amman" title="Reset to Amman"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  </div>
+
+  <div class="float mode" id="mode" hidden><div><b data-i="modeT">Preview mode</b><span id="modeP"></span><button type="button" id="modeX" aria-label="Dismiss">×</button></div></div>
+
+  <aside class="float card" id="card" hidden aria-live="polite">
+    <canvas id="cardImg" width="680" height="306"></canvas>
+    <div class="badges" id="cBadges"></div>
+    <button type="button" class="x" id="cardX" aria-label="Close">×</button>
+    <div class="b">
+      <div class="kind" id="cKind"></div>
+      <h3 id="cTitle"></h3>
+      <div class="price" id="cPrice"></div>
+      <div class="meta" id="cMeta"></div>
+      <button type="button" class="btn" id="cMore" data-i="more">View details</button>
+    </div>
+  </aside>
+
+  <div class="float attr" id="attr" hidden><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+
+  <div class="float notice"><b data-i="demoU">DEMO DATA</b><span data-i="notice">Sample listings, prices and locations are simulated.</span></div>
+
+  <div class="modal" id="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dT">
+      <canvas id="dImg" width="840" height="368"></canvas>
+      <div class="badges" id="dBadges"></div>
+      <div class="b">
+        <div class="dh" id="dKind"></div>
+        <h3 id="dT"></h3>
+        <div class="price" id="dPrice"></div>
+        <div class="grid" id="dGrid"></div>
+        <p id="dDesc" style="margin:0"></p>
+        <div class="warn" id="dWarn"></div>
+        <div class="acts"><button type="button" class="btn" id="dClose" data-i="close">Close</button><button type="button" class="btn alt" id="dShow" data-i="showMap">Show on map</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const TXT={
+ en:{tagline:'Imagine What’s Possible.',demo:'Demo',demoU:'DEMO DATA',notice:'Sample listings, prices and locations are simulated.',searchPh:'Search a neighborhood or property',
+  all:'All',sale:'For sale',rent:'For rent',land:'Land',commercial:'Commercial',invest:'Investment',filters:'Filters',fType:'Property type',fArea:'Minimum area',fReset:'Clear filters',fDone:'Done',anyType:'Any type',
+  more:'View details',close:'Close',showMap:'Show on map',approx:'Approximate location',place:'Place',noRes:'Nothing matches.',onRequest:'Price on request',mo:'/mo',area:'Area',beds:'Bedrooms',baths:'Bathrooms',ref:'Reference',type:'Type',deal:'Listing',nb:'Neighborhood',ppm:'Price per m² (simulated)',
+  modeT:'Artifact preview limit',modeP:' This viewer blocks outside map data, so the street basemap cannot load here. Markers, search, filters and cards are live. On a normally hosted site the same code loads the OpenFreeMap street map underneath.',styleStd:'Standard',styleLight:'Light',
+  demoNote:'Demonstration data. This listing, its price and its location are samples, not a real offer.',
+  desc:'Sample description for demonstration only. No real property, owner, zoning or legal information is shown.',
+  cat:{apartment:'Apartment',villa:'Villa',house:'House',penthouse:'Penthouse',office:'Office',shop:'Shop',warehouse:'Warehouse',land:'Land',building:'Building',plot:'Land',tourism:'Tourism land'},
+  tx:{sale:'For sale',rent:'For rent',commercial_investment:'Investment'},unit:'m²',jd:'JD'},
+ ar:{tagline:'تخيّل ما هو ممكن.',demo:'تجريبي',demoU:'بيانات تجريبية',notice:'العقارات والأسعار والمواقع المعروضة محاكاة تجريبية.',searchPh:'ابحث عن حي أو عقار',
+  all:'الكل',sale:'للبيع',rent:'للإيجار',land:'أراضٍ',commercial:'تجاري',invest:'استثمار',filters:'تصفية',fType:'نوع العقار',fArea:'الحد الأدنى للمساحة',fReset:'مسح التصفية',fDone:'تم',anyType:'كل الأنواع',
+  more:'عرض التفاصيل',close:'إغلاق',showMap:'عرض على الخريطة',approx:'موقع تقريبي',place:'مكان',noRes:'لا توجد نتائج.',onRequest:'السعر عند الطلب',mo:'/شهر',area:'المساحة',beds:'غرف النوم',baths:'الحمامات',ref:'المرجع',type:'النوع',deal:'نوع العرض',nb:'الحي',ppm:'السعر للمتر (محاكاة)',
+  modeT:'قيد المعاينة',modeP:' هذا العارض يحجب بيانات الخرائط الخارجية، لذلك لا تُحمَّل خريطة الشوارع هنا. العلامات والبحث والتصفية والبطاقات تعمل فعلياً. في موقع مستضاف بشكل عادي يحمّل الكود نفسه خريطة OpenFreeMap تحتها.',styleStd:'قياسي',styleLight:'فاتح',
+  demoNote:'بيانات تجريبية. هذا العرض وسعره وموقعه نماذج وليست عرضاً حقيقياً.',
+  desc:'وصف نموذجي للعرض التجريبي فقط. لا تُعرض هنا أي معلومات حقيقية عن عقار أو مالك أو تنظيم أو وضع قانوني.',
+  cat:{apartment:'شقة',villa:'فيلا',house:'منزل',penthouse:'بنتهاوس',office:'مكتب',shop:'محل',warehouse:'مستودع',land:'أرض',building:'مبنى',plot:'أرض',tourism:'أرض سياحية'},
+  tx:{sale:'للبيع',rent:'للإيجار',commercial_investment:'استثمار'},unit:'م²',jd:'د.أ'}
+};
+let lang='en';const t=k=>TXT[lang][k]!==undefined?TXT[lang][k]:TXT.en[k];
+
+/* ---------- DEMO DATA: simulated listings at approximate, neighborhood-level positions ---------- */
+const AREAS=[
+ {id:'amman',en:'Amman',ar:'عمّان',lat:31.9539,lng:35.9106,r:0,zoom:12},
+ {id:'downtown',en:'Downtown (Al Balad)',ar:'وسط البلد',lat:31.9505,lng:35.9385,r:600,zoom:15,label:1},
+ {id:'jabal',en:'Jabal Amman',ar:'جبل عمان',lat:31.953,lng:35.92,r:700,zoom:15,label:1},
+ {id:'abdali',en:'Abdali',ar:'العبدلي',lat:31.963,lng:35.907,r:600,zoom:15,label:1},
+ {id:'shmeisani',en:'Shmeisani',ar:'الشميساني',lat:31.973,lng:35.9,r:700,zoom:15,label:1},
+ {id:'sweifieh',en:'Sweifieh',ar:'الصويفية',lat:31.956,lng:35.859,r:800,zoom:15,label:1},
+ {id:'abdoun',en:'Abdoun',ar:'عبدون',lat:31.951,lng:35.882,r:800,zoom:15,label:1},
+ {id:'rabieh',en:'Rabieh',ar:'الرابية',lat:31.982,lng:35.874,r:700,zoom:15,label:1},
+ {id:'khalda',en:'Khalda',ar:'خلدا',lat:31.988,lng:35.835,r:900,zoom:15,label:1},
+ {id:'dabouq',en:'Dabouq',ar:'دابوق',lat:31.993,lng:35.823,r:900,zoom:15,label:1},
+ {id:'jubeiha',en:'Jubeiha',ar:'الجبيهة',lat:32.015,lng:35.875,r:900,zoom:15,label:1},
+ {id:'marj',en:'Marj Al Hamam',ar:'مرج الحمام',lat:31.895,lng:35.835,r:900,zoom:15,label:1},
+ {id:'deadsea',en:'Dead Sea area',ar:'منطقة البحر الميت',lat:31.755,lng:35.575,r:0,zoom:13}
+];
+const AB={};AREAS.forEach(a=>AB[a.id]=a);
+function mk_(id,ref,z,cat,tx,en,ar,price,area,bd,ba,lat,lng,kind){return{id,ref,z,cat,tx,en,ar,price,area,bd:bd||0,ba:ba||0,lat,lng,kind:kind||'property'}}
+const ITEMS=[
+ mk_('demo-1','DEMO-001','abdoun','apartment','sale','Sample apartment with city views','شقة نموذجية بإطلالة على المدينة',150000,160,3,2,31.951,35.882),
+ mk_('demo-2','DEMO-002','dabouq','villa','sale','Sample garden villa','فيلا نموذجية مع حديقة',520000,450,5,4,31.993,35.823),
+ mk_('demo-3','DEMO-003','sweifieh','apartment','rent','Sample furnished apartment','شقة مفروشة نموذجية',650,120,2,2,31.956,35.859),
+ mk_('demo-4','DEMO-004','abdali','office','commercial_investment','Sample office floor','طابق مكتبي نموذجي',380000,300,0,0,31.963,35.907),
+ mk_('demo-5','DEMO-005','jabal','penthouse','sale','Sample penthouse with terrace','بنتهاوس نموذجي مع تراس',420000,280,4,3,31.953,35.92),
+ mk_('demo-6','DEMO-006','khalda','house','rent','Sample family house','منزل عائلي نموذجي',900,220,4,3,31.988,35.835),
+ mk_('demo-7','DEMO-007','sweifieh','shop','commercial_investment','Sample street-front shop','محل نموذجي على شارع رئيسي',210000,90,0,0,31.9585,35.8625),
+ mk_('demo-8','DEMO-008','shmeisani','building','sale','Sample apartment building','عمارة سكنية نموذجية',780000,900,0,0,31.973,35.9),
+ mk_('demo-9','DEMO-009','marj','warehouse','rent','Sample warehouse','مستودع نموذجي',1400,600,0,0,31.9015,35.841),
+ mk_('demo-10','DEMO-010','rabieh','villa','sale','Sample modern villa','فيلا عصرية نموذجية',680000,520,5,5,31.982,35.874),
+ mk_('demo-11','DEMO-011','downtown','apartment','rent','Sample studio apartment','شقة استوديو نموذجية',380,55,1,1,31.951,35.938),
+ mk_('demo-12','DEMO-012','jubeiha','apartment','sale','Sample family apartment','شقة عائلية نموذجية',98000,130,3,2,32.0125,35.872),
+ mk_('demo-13','DEMO-013','shmeisani','office','sale','Sample office for sale','مكتب نموذجي للبيع',255000,180,0,0,31.9765,35.9035),
+ mk_('demo-14','DEMO-014','abdoun','shop','commercial_investment','Sample retail strip','صف محلات نموذجي',540000,400,0,0,31.9535,35.8865),
+ mk_('demo-land-1','DEMO-L01','marj','plot','sale','Sample residential plot','قطعة أرض سكنية نموذجية',90000,1200,0,0,31.895,35.835,'land'),
+ mk_('demo-land-2','DEMO-L02','dabouq','plot','sale','Sample land parcel','قطعة أرض نموذجية',140000,1800,0,0,31.9995,35.8155,'land'),
+ mk_('demo-land-3','DEMO-L03','deadsea','tourism','sale','Sample tourism parcel','قطعة أرض سياحية نموذجية',undefined,8000,0,0,31.755,35.575,'land')
+];
+const IBY={};ITEMS.forEach(i=>IBY[i.id]=i);
+const COM=new Set(['office','shop','warehouse']);
+const isInvest=i=>i.tx==='commercial_investment'||i.cat==='building';
+const isCommercial=i=>COM.has(i.cat);
+const isLand=i=>i.kind==='land';
+const styleOf=i=>isInvest(i)?'invest':isCommercial(i)?'commercial':isLand(i)?'land':i.tx==='rent'?'rent':'sale';
+const CHIPS=[['all',null,null],['sale',i=>i.tx==='sale','#0B1B2E'],['rent',i=>i.tx==='rent','#C9AE79'],['land',isLand,'#F7F3EA'],['commercial',isCommercial,'#23405E'],['invest',isInvest,'#A88B55']];
+const TYPES=['apartment','penthouse','villa','house','building','office','shop','warehouse','plot'];
+let chip='all',fType='',fArea=0,selectedId=null;
+const passes=i=>{const c=CHIPS.find(c=>c[0]===chip);return(!c[1]||c[1](i))&&(!fType||i.cat===fType)&&(!fArea||i.area>=fArea)};
+const nf=()=>new Intl.NumberFormat(lang==='ar'?'ar-JO':'en-US');
+const nameOf=i=>lang==='ar'?i.ar:i.en,aname=id=>lang==='ar'?AB[id].ar:AB[id].en;
+function short(i){if(i.price===undefined)return lang==='ar'?'عند الطلب':'On request';const v=i.price>=1000?Math.round(i.price/1000)+'K':String(i.price);return t('jd')+' '+v+(i.tx==='rent'?t('mo'):'')}
+const money=i=>i.price===undefined?t('onRequest'):nf().format(i.price)+' '+t('jd')+(i.tx==='rent'?' '+t('mo'):'');
+const typeName=i=>t('cat')[i.cat]||i.cat;
+
+/* ---------- map: MapLibre GL JS + OpenFreeMap (free, no API key, no account) ---------- */
+if(!window.maplibregl){$('map').innerHTML='<p style="padding:40px;max-width:420px">The map library did not load. Reload the page.</p>';return}
+const maplibregl=window.maplibregl;
+const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Arabic text shaping for map labels (needed on a normal website; loaded lazily, only when Arabic labels appear)
+try{const p=maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',true);if(p&&p.catch)p.catch(()=>{})}catch(e){}
+const STYLE_BASE='https://tiles.openfreemap.org/styles/';
+let styleName='liberty',live=false,tilesOk=false;
+// The map starts on a plain cream background so that markers, search and navigation always work.
+// The real OpenFreeMap style is then loaded on top. Nothing is drawn or invented if it cannot load.
+const BLANK={version:8,sources:{},layers:[{id:'bg',type:'background',paint:{'background-color':'#EFE8D8'}}]};
+const map=new maplibregl.Map({container:'map',style:BLANK,center:[35.9106,31.9539],zoom:11.5,minZoom:8,maxZoom:19,attributionControl:false,dragRotate:false,pitchWithRotate:false,touchPitch:false,renderWorldCopies:false});
+map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
+function homeBounds(){let w=180,s=90,e=-180,n=-90;ITEMS.filter(i=>i.z!=='deadsea').forEach(i=>{w=Math.min(w,i.lng);e=Math.max(e,i.lng);s=Math.min(s,i.lat);n=Math.max(n,i.lat)});return[[w,s],[e,n]]}
+function home(animate){const m=innerWidth<=720;map.fitBounds(homeBounds(),{padding:{top:m?150:120,bottom:m?90:50,left:m?30:70,right:m?70:110},maxZoom:13,duration:animate&&!reduce?900:0})}
+home(false);
+
+function showLimit(){if(!selectedId)$('mode').hidden=false}
+async function loadBase(name){
+ styleName=name;tilesOk=false;
+ try{
+  const r=await fetch(STYLE_BASE+name);if(!r.ok)throw new Error('style '+r.status);await r.json();
+  map.setStyle(STYLE_BASE+name);live=true;$('mode').hidden=true;$('attr').hidden=false;
+  setTimeout(()=>{if(!tilesOk){live=false;$('attr').hidden=true;showLimit()}},12000);
+ }catch(e){live=false;$('attr').hidden=true;showLimit()}
+}
+map.on('idle',()=>{if(live&&map.getStyle()&&map.getStyle().sources&&map.getStyle().sources.openmaptiles){tilesOk=true;$('mode').hidden=true}});
+$('modeX').addEventListener('click',()=>{$('mode').hidden=true});
+loadBase('liberty');
+
+// Label language follows the interface language. OpenMapTiles data carries name:en and name:ar where OpenStreetMap has them.
+function applyLabels(){
+ const st=map.getStyle();if(!st||!st.layers)return;
+ const f=lang==='ar'?['coalesce',['get','name:ar'],['get','name']]:['coalesce',['get','name:en'],['get','name_en'],['get','name:latin'],['get','name']];
+ for(const l of st.layers){
+  if(l.type!=='symbol'||!l.layout||!l.layout['text-field']||l['source-layer']==='housenumber')continue;
+  if(JSON.stringify(l.layout['text-field']).indexOf('name')<0)continue;
+  try{map.setLayoutProperty(l.id,'text-field',f)}catch(e){}
+ }
+}
+map.on('style.load',applyLabels);
+
+/* property markers (DOM markers: crisp price labels, keyboard focusable) */
+let markers=[];
+function renderMarkers(){
+ markers.forEach(m=>m.remove());markers=[];
+ const vis=ITEMS.filter(passes);
+ vis.forEach(i=>{
+  const el=document.createElement('div');el.className='pmw';el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',nameOf(i)+' — '+t('demo'));
+  const pm=document.createElement('div');pm.className='pm '+styleOf(i)+(i.id===selectedId?' sel':'');pm.textContent=short(i);el.appendChild(pm);
+  el.style.zIndex=String(Math.round((90-i.lat)*1000)+(i.id===selectedId?100000:0));
+  const go=e=>{e.stopPropagation();selectItem(i.id,true)};
+  el.addEventListener('click',go);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go(e)}});
+  markers.push(new maplibregl.Marker({element:el}).setLngLat([i.lng,i.lat]).addTo(map));
+ });
+ $('fBtn').textContent=t('filters')+' · '+vis.length;
+}
+function focusOn(lat,lng,zoom){
+ const mob=innerWidth<=720;
+ map.flyTo({center:[lng,lat],zoom:zoom,offset:[0,mob?-95:0],duration:reduce?0:800,essential:true});
+}
+function selectItem(id,fly){
+ selectedId=id;const it=IBY[id];$('mode').hidden=true;showCard(it);renderMarkers();
+ if(fly)focusOn(it.lat,it.lng,Math.max(map.getZoom(),15));
+}
+function closeCard(){selectedId=null;$('card').hidden=true;document.body.classList.remove('has-card');document.documentElement.style.removeProperty('--cardH');renderMarkers()}
+map.on('click',()=>{if(selectedId)closeCard();$('sugg').hidden=true;$('pop').hidden=true;$('fBtn').setAttribute('aria-expanded','false')});
+
+/* ---------- card + details ---------- */
+function badges(el){el.innerHTML='';const b=document.createElement('span');b.className='badge';b.textContent=t('demo');el.appendChild(b)}
+function showCard(it){
+ $('card').hidden=false;document.body.classList.add('has-card');badges($('cBadges'));
+ $('cKind').textContent=(it.tx?t('tx')[it.tx]+' · ':'')+typeName(it);
+ $('cTitle').textContent=nameOf(it);$('cPrice').textContent=money(it);
+ const m=$('cMeta');m.innerHTML='';
+ [aname(it.z)+' · '+t('approx'),nf().format(it.area)+' '+t('unit')].forEach(s=>{const e=document.createElement('span');e.textContent=s;m.appendChild(e)});
+ illus($('cardImg'),it);
+ requestAnimationFrame(()=>document.documentElement.style.setProperty('--cardH',$('card').offsetHeight+'px'));
+}
+function openDetails(){
+ const it=IBY[selectedId];if(!it)return;
+ badges($('dBadges'));
+ $('dKind').textContent=(it.tx?t('tx')[it.tx]+' · ':'')+typeName(it);$('dT').textContent=nameOf(it);$('dPrice').textContent=money(it);
+ const g=$('dGrid');g.innerHTML='';
+ const rows=[[t('nb'),aname(it.z)],[t('area'),nf().format(it.area)+' '+t('unit')]];
+ if(it.bd)rows.push([t('beds'),String(it.bd)]);if(it.ba)rows.push([t('baths'),String(it.ba)]);
+ rows.push([t('type'),typeName(it)]);if(it.tx)rows.push([t('deal'),t('tx')[it.tx]]);
+ if(it.price&&it.tx==='sale')rows.push([t('ppm'),nf().format(Math.round(it.price/it.area))+' '+t('jd')]);
+ rows.push([t('ref'),it.ref]);
+ rows.forEach(([k,v])=>{const d=document.createElement('div'),s=document.createElement('small'),sp=document.createElement('span');s.textContent=k;sp.textContent=v;d.append(s,sp);g.appendChild(d)});
+ $('dDesc').textContent=t('desc');$('dWarn').textContent=t('demoNote');
+ illus($('dImg'),it);$('modal').hidden=false;$('dClose').focus();
+}
+$('cMore').addEventListener('click',openDetails);
+$('dClose').addEventListener('click',()=>{$('modal').hidden=true});
+$('dShow').addEventListener('click',()=>{$('modal').hidden=true;if(selectedId)selectItem(selectedId,true)});
+$('modal').addEventListener('click',e=>{if(e.target===$('modal'))$('modal').hidden=true});
+$('cardX').addEventListener('click',closeCard);
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('modal').hidden)$('modal').hidden=true;else if(selectedId)closeCard();$('pop').hidden=true;$('sugg').hidden=true}});
+
+/* Illustration: clearly an illustration, labelled DEMO, never presented as a photograph. */
+function illus(cv,it){
+ const g=cv.getContext('2d'),W=cv.width,Hh=cv.height,gy=Hh*.76,c=it.cat;
+ const bg=g.createLinearGradient(0,0,0,Hh);bg.addColorStop(0,'#0B1B2E');bg.addColorStop(.62,'#23405E');bg.addColorStop(1,'#C9AE79');g.fillStyle=bg;g.fillRect(0,0,W,Hh);
+ g.fillStyle='rgba(247,243,234,.85)';g.beginPath();g.arc(W*.82,Hh*.28,Hh*.065,0,7);g.fill();
+ g.fillStyle='#13293F';g.beginPath();g.moveTo(0,gy);g.bezierCurveTo(W*.2,gy-40,W*.35,gy+10,W*.55,gy-26);g.bezierCurveTo(W*.75,gy-50,W*.9,gy,W,gy-14);g.lineTo(W,Hh);g.lineTo(0,Hh);g.fill();
+ g.fillStyle='#0B1B2E';g.fillRect(0,gy+8,W,Hh);
+ const box=(x,y,w,h,f)=>{g.fillStyle=f;g.fillRect(x,y,w,h)};
+ const wins=(x,y,w,h,s)=>{g.fillStyle='rgba(201,174,121,.75)';for(let yy=y+10;yy<y+h-8;yy+=s)for(let xx=x+8;xx<x+w-8;xx+=s*.9)g.fillRect(xx,yy,s*.4,s*.5)};
+ if(c==='building'||c==='office'){[[.16,.14,.2,.4],[.4,.2,.22,.52],[.66,.14,.18,.34]].forEach(([a,b,w,h])=>{const x=W*a,ww=W*w,hh=Hh*h*1.3;box(x,gy-hh,ww,hh,'#E9E1CF');wins(x,gy-hh,ww,hh,20)})}
+ else if(c==='villa'||c==='house'){box(W*.2,gy-Hh*.2,W*.32,Hh*.2,'#F1EADA');box(W*.25,gy-Hh*.36,W*.22,Hh*.17,'#E2D6BE');box(W*.2-6,gy-Hh*.2-6,W*.32+12,8,'#C9AE79');box(W*.24,gy-Hh*.12,W*.1,Hh*.12,'#0B1B2E');box(W*.6,gy+2,W*.28,Hh*.05,'#2F7F86')}
+ else if(c==='apartment'||c==='penthouse'){const x=W*.28,w=W*.44,h=Hh*.5;box(x,gy-h,w,h,'#E3DAC6');wins(x,gy-h,w,h,22);for(let yy=gy-h+28;yy<gy-8;yy+=44)box(x-6,yy,w+12,4,'#C9AE79');if(c==='penthouse'){box(x+w*.2,gy-h-Hh*.1,w*.6,Hh*.1,'#F1EADA');box(x+w*.2-6,gy-h-Hh*.1-4,w*.6+12,5,'#C9AE79')}}
+ else if(c==='shop'||c==='warehouse'){box(W*.2,gy-Hh*.22,W*.6,Hh*.22,c==='shop'?'#E3DAC6':'#B9C3CC');box(W*.2,gy-Hh*.22,W*.6,10,'#C9AE79');if(c==='shop'){box(W*.28,gy-Hh*.14,W*.2,Hh*.14,'#0B1B2E');box(W*.55,gy-Hh*.14,W*.16,Hh*.14,'#13293F')}else for(let k=0;k<3;k++)box(W*.26+k*W*.17,gy-Hh*.13,W*.12,Hh*.13,'#13293F')}
+ else{g.setLineDash([10,7]);g.strokeStyle='#C9AE79';g.lineWidth=3;g.strokeRect(W*.22,gy-Hh*.14,W*.5,Hh*.2);g.setLineDash([]);g.fillStyle='rgba(201,174,121,.25)';g.fillRect(W*.22,gy-Hh*.14,W*.5,Hh*.2)}
+ g.fillStyle='rgba(247,243,234,.85)';g.font='600 '+Math.round(W*.026)+'px Inter,system-ui,sans-serif';g.textBaseline='alphabetic';
+ g.fillText(lang==='ar'?'رسم توضيحي تجريبي':'DEMO ILLUSTRATION',16,Hh-14);
+}
+
+/* ---------- search ---------- */
+const q=$('q'),sg=$('sugg');
+function suggest(){
+ const term=q.value.trim().toLowerCase();sg.innerHTML='';if(!term){sg.hidden=true;return}
+ const as=AREAS.filter(a=>(a.en+' '+a.ar).toLowerCase().includes(term)).slice(0,4);
+ const is=ITEMS.filter(i=>(i.en+' '+i.ar+' '+i.ref+' '+AB[i.z].en+' '+AB[i.z].ar).toLowerCase().includes(term)).slice(0,6);
+ const mk=(label,sub,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;const s=document.createElement('small');s.textContent=sub;b.appendChild(s);b.addEventListener('click',()=>{fn();sg.hidden=true;q.value=label;q.blur()});sg.appendChild(b)};
+ as.forEach(a=>mk(lang==='ar'?a.ar:a.en,t('place')+' · '+t('approx'),()=>{if(a.id==='amman')home(true);else focusOn(a.lat,a.lng,a.zoom)}));
+ is.forEach(i=>mk(nameOf(i),aname(i.z)+' · '+i.ref,()=>{if(!passes(i)){chip='all';fType='';fArea=0;syncFilterUI()}selectItem(i.id,true)}));
+ if(!as.length&&!is.length){const d=document.createElement('div');d.style.padding='10px 14px';d.textContent=t('noRes');sg.appendChild(d)}
+ sg.hidden=false;
+}
+q.addEventListener('input',suggest);q.addEventListener('focus',suggest);
+q.addEventListener('keydown',e=>{if(e.key==='Enter'){const f=sg.querySelector('button');if(f)f.click()}});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.search'))sg.hidden=true;if(!e.target.closest('.chipwrap')){$('pop').hidden=true;$('fBtn').setAttribute('aria-expanded','false')}});
+
+/* ---------- filters ---------- */
+function renderChips(){
+ const row=$('chips');row.innerHTML='';
+ CHIPS.forEach(([id,fn,color])=>{
+  const b=document.createElement('button');b.type='button';b.className='chip';b.setAttribute('aria-pressed',String(chip===id));
+  if(color){const d=document.createElement('i');d.style.background=color;b.appendChild(d)}
+  b.appendChild(document.createTextNode(t(id)+(fn?' '+ITEMS.filter(fn).length:'')));
+  b.addEventListener('click',()=>{chip=id;if(selectedId&&!passes(IBY[selectedId]))closeCard();renderChips();renderMarkers()});row.appendChild(b);
+ });
+}
+function renderTypeSelect(){const s=$('fType');s.innerHTML='';[['',t('anyType')]].concat(TYPES.map(k=>[k,t('cat')[k]])).forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;s.appendChild(o)});s.value=fType}
+function syncFilterUI(){renderChips();$('fType').value=fType;$('fArea').value=fArea;$('fAreaV').textContent=nf().format(fArea)+' '+t('unit');renderMarkers()}
+$('fBtn').addEventListener('click',()=>{const p=$('pop');p.hidden=!p.hidden;$('fBtn').setAttribute('aria-expanded',String(!p.hidden))});
+$('fType').addEventListener('change',e=>{fType=e.target.value;syncFilterUI()});
+$('fArea').addEventListener('input',e=>{fArea=+e.target.value;syncFilterUI()});
+$('fReset').addEventListener('click',()=>{fType='';fArea=0;chip='all';syncFilterUI()});
+$('fDone').addEventListener('click',()=>{$('pop').hidden=true;$('fBtn').setAttribute('aria-expanded','false')});
+
+/* ---------- controls ---------- */
+$('styleBtn').addEventListener('click',()=>{loadBase(styleName==='liberty'?'positron':'liberty')});
+$('zIn').addEventListener('click',()=>map.zoomIn());$('zOut').addEventListener('click',()=>map.zoomOut());
+$('reset').addEventListener('click',()=>{closeCard();q.value='';home(true)});
+$('langBtn').addEventListener('click',()=>setLang(lang==='en'?'ar':'en'));
+function setLang(l){
+ lang=l;document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';
+ document.querySelectorAll('[data-i]').forEach(e=>{e.textContent=t(e.dataset.i)});
+ document.querySelectorAll('[data-ia]').forEach(e=>{e.placeholder=t(e.dataset.ia)});
+ $('langBtn').textContent=l==='ar'?'English':'العربية';$('modeP').textContent=t('modeP');
+ q.value='';sg.hidden=true;renderTypeSelect();if(map.isStyleLoaded())applyLabels();syncFilterUI();
+ if(selectedId)showCard(IBY[selectedId]);
+ if(!$('modal').hidden)openDetails();
+}
+window.addEventListener('resize',()=>map.resize());
+setLang('en');
+})();
+</script>
+
+</body></html>
